@@ -47,6 +47,7 @@
 
     {{-- Animaciones base --}}
     <style>
+        [x-cloak] { display: none !important; }
         /* Transición suave global */
         *, *::before, *::after { transition-property: background-color, border-color, color, opacity, transform, box-shadow; transition-duration: 150ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
 

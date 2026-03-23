@@ -12,7 +12,7 @@ class CustomerController extends Controller
 {
     public function index(Request $request): View
     {
-        $query = Customer::reales(); // Excluir cliente de mostrador
+        $query = Customer::reales();
 
         if ($request->filled('buscar')) {
             $query->buscar($request->buscar);
@@ -49,7 +49,7 @@ class CustomerController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $datos = $request->validate([
             'tipo_documento'   => 'required|in:CC,NIT,CE,PASAPORTE',
             'numero_documento' => 'required|string|max:20|unique:customers,numero_documento',
             'nombre'           => 'required|string|max:150',
@@ -59,7 +59,7 @@ class CustomerController extends Controller
             'email'            => 'nullable|email|max:150',
         ]);
 
-        Customer::create($request->validated());
+        Customer::create($datos);
 
         return redirect()->route('admin.customers.index')
             ->with('success', 'Cliente registrado exitosamente.');
@@ -79,7 +79,6 @@ class CustomerController extends Controller
 
     public function edit(Customer $customer): View
     {
-        // No permitir editar al cliente de mostrador
         if ($customer->es_mostrador) {
             return redirect()->route('admin.customers.index')
                 ->with('error', 'El cliente de mostrador no se puede editar.');
@@ -95,7 +94,7 @@ class CustomerController extends Controller
                 ->with('error', 'El cliente de mostrador no se puede modificar.');
         }
 
-        $request->validate([
+        $datos = $request->validate([
             'tipo_documento'   => 'required|in:CC,NIT,CE,PASAPORTE',
             'numero_documento' => "required|string|max:20|unique:customers,numero_documento,{$customer->id}",
             'nombre'           => 'required|string|max:150',
@@ -105,7 +104,7 @@ class CustomerController extends Controller
             'email'            => 'nullable|email|max:150',
         ]);
 
-        $customer->update($request->validated());
+        $customer->update($datos);
 
         return redirect()->route('admin.customers.index')
             ->with('success', 'Cliente actualizado correctamente.');
@@ -117,14 +116,13 @@ class CustomerController extends Controller
             return back()->with('error', 'El cliente de mostrador no puede eliminarse.');
         }
 
-        // Restricción de negocio: no borrar si tiene compras
         if ($customer->tieneSalesAsociadas()) {
             return back()->with('error',
                 "No se puede eliminar a '{$customer->nombre}' porque tiene compras registradas. Puedes desactivarlo."
             );
         }
 
-        $customer->delete(); // SoftDelete
+        $customer->delete();
 
         return redirect()->route('admin.customers.index')
             ->with('success', 'Cliente eliminado.');
