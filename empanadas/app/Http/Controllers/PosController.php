@@ -70,70 +70,56 @@ class PosController extends Controller
     // ---------------------------------------------------------------
 
     public function procesarVenta(Request $request): JsonResponse
-    {
-        $request->validate([
-            'customer_id'          => 'nullable|exists:customers,id',
-            'items'                => 'required|array|min:1',
-            'items.*.product_id'   => 'required|exists:products,id',
-            'items.*.cantidad'     => 'required|integer|min:1',
-            'items.*.precio_unitario' => 'required|numeric|min:0',
-            'items.*.notas_item'   => 'nullable|string|max:255',
-            'descuento_porcentaje' => 'nullable|numeric|min:0|max:100',
-            'metodos_pago'         => 'required|array|min:1',
-            'metodos_pago.*.metodo' => 'required|string',
-            'metodos_pago.*.monto'  => 'required|numeric|min:0',
-            'notas'                => 'nullable|string|max:500',
+{
+    $request->validate([
+        'customer_id'             => 'nullable|exists:customers,id',
+        'items'                   => 'required|array|min:1',
+        'items.*.product_id'      => 'required|exists:products,id',
+        'items.*.cantidad'        => 'required|integer|min:1',
+        'items.*.precio_unitario' => 'required|numeric|min:0',
+        'descuento_porcentaje'    => 'nullable|numeric|min:0|max:100',
+        'metodos_pago'            => 'required|array|min:1',
+        'metodos_pago.*.metodo'   => 'required|string',
+        'metodos_pago.*.monto'    => 'required|numeric|min:0',
+        'notas'                   => 'nullable|string|max:500',
+    ]);
+
+    $customerId    = $request->customer_id ?? Customer::MOSTRADOR_ID;
+    $descuentoPct  = $request->descuento_porcentaje ?? 0;
+
+    // 1. Crear la venta
+    $sale = Sale::create([
+        'customer_id'          => $customerId,
+        'descuento_porcentaje' => $descuentoPct,
+        'metodos_pago'         => $request->metodos_pago,
+        'estado'               => 'completada',
+        'notas'                => $request->notas,
+        'cajero_id'            => auth()->id(),
+    ]);
+
+    // 2. Crear los ítems
+    foreach ($request->items as $itemData) {
+        $sale->items()->create([
+            'product_id'      => $itemData['product_id'],
+            'cantidad'        => $itemData['cantidad'],
+            'precio_unitario' => $itemData['precio_unitario'],
+            'descuento_item'  => 0,
+            'notas_item'      => $itemData['notas_item'] ?? null,
         ]);
-
-        try {
-            DB::beginTransaction();
-
-            $customerId = $request->customer_id ?? Customer::MOSTRADOR_ID;
-            $descuentoPct = $request->descuento_porcentaje ?? 0;
-
-            // 1. Crear la cabecera de venta
-            $sale = Sale::create([
-                'customer_id'          => $customerId,
-                'descuento_porcentaje' => $descuentoPct,
-                'metodos_pago'         => $request->metodos_pago,
-                'estado'               => 'completada',
-                'notas'                => $request->notas,
-                'cajero_id'            => auth()->id(),
-            ]);
-
-            // 2. Crear los ítems
-            foreach ($request->items as $itemData) {
-                $sale->items()->create([
-                    'product_id'      => $itemData['product_id'],
-                    'cantidad'        => $itemData['cantidad'],
-                    'precio_unitario' => $itemData['precio_unitario'],
-                    'descuento_item'  => 0,
-                    'notas_item'      => $itemData['notas_item'] ?? null,
-                ]);
-            }
-
-            // 3. Recalcular totales
-            $sale->load('items');
-            $sale->recalcularTotales();
-
-            DB::commit();
-
-            return response()->json([
-                'success'        => true,
-                'sale_id'        => $sale->id,
-                'numero_factura' => $sale->numero_factura,
-                'total'          => $sale->total,
-                'total_formateado' => $sale->total_formateado,
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al procesar la venta: ' . $e->getMessage(),
-            ], 500);
-        }
     }
+
+    // 3. Recalcular totales
+    $sale->load('items');
+    $sale->recalcularTotales();
+
+    return response()->json([
+        'success'          => true,
+        'sale_id'          => $sale->id,
+        'numero_factura'   => $sale->numero_factura,
+        'total'            => $sale->total,
+        'total_formateado' => $sale->total_formateado,
+    ]);
+}
 
     // ---------------------------------------------------------------
     // Ver detalle / comprobante de una venta (para imprimir)
